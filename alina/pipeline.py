@@ -53,7 +53,7 @@ def process_image(img: np.ndarray, roi_points: np.ndarray, config: PipelineConfi
 
     # 3.6 histogram analysis -> vertical projection, peak column
     avg_pixel, peak_value = calc_histogram(mask, min_white_pixels=config.min_white_pixels)
-
+   
     # 3.7 threshold check -> is this peak an actual line marking or noise
     if not avg_pixel or peak_value <= config.peak_pixel_threshold:
         return no_lines_img, np.empty((0, 2), dtype=np.int32), False

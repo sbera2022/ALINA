@@ -1,0 +1,6 @@
+Method,Frames Labeled,Labeling Rate (%),ROI IoU,Average ALINA Time (s)
+K-Means,26,52,0.4931,20.6368
+Canny + Hough,0,0,0.5376,0.2875
+HSV,10,20,0.5705,0.3669
+SegFormer,2,4,0.3788,0.6018
+Hybrid,20,40,0.4329,8.3619

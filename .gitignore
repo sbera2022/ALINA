@@ -1,0 +1,5 @@
+venv/
+venv_segformer/
+.venv/
+__pycache__/
+*.pyc
