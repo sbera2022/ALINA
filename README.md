@@ -1,282 +1,421 @@
-# ALINA: Advanced Line Identification and Notation Algorithm
+ALINA: Automated Taxiway Line Identification Using AI/ML and Computer Vision
 
-<p align="center">
-  <a href="https://arxiv.org/abs/2406.08775" target="_blank" rel="noopener noreferrer">Paper</a> | <a href="https://khanhafeez.github.io/alina-project-page/" target="_blank" rel="noopener noreferrer">Website</a> | <a href="https://drive.google.com/file/d/1PRiW-VAJYTePNzT9zAQ2bZFvNlt-OIfU/view?usp=sharing" target="_blank" rel="noopener noreferrer">CVPR 2024 Presentation</a>
-</p>
+Project Overview
 
-Official implementation of *ALINA: Advanced Line Identification and Notation Algorithm* [1], accepted to the CVPR 2024 Workshop on Vision Datasets Understanding (VDU).
+This project extends the ALINA (Automated Line Identification and Annotation) pipeline by exploring methods for automatically selecting a Region of Interest (ROI) in airport taxiway images.
 
-<p align="center">
-  <img src="assets/method.png" width="500">
-</p>
+The original ALINA workflow requires users to manually select a region before applying perspective transformation and line detection. This project investigates whether machine learning, semantic segmentation, and traditional computer vision techniques can automate that process.
 
-## 📦 What's in this Repo
+Five approaches were implemented and evaluated on a 50-frame image dataset.
 
-**Core pipeline (`alina/`)**
+Original Repository: ALINA
 
-- Interactive ROI selection, drawn once and reused across an entire video's frames
-- Perspective warp of the ROI into a bird's-eye view
-- HSV color feature normalization + color thresholding
-- Histogram-based peak detection to locate candidate line markings
-- CIRCLEDAT: the traversal algorithm that isolates line-marking pixels
-- Frame unwarping, annotation, and coordinate file output
-- Data prep utilities: video → frames, frame rotation, batch resizing
+Project Objectives
 
-**Evaluation (`eval/`)**
+The primary objectives are to:
 
-- `cbem`, an interactive tool to hand-create ground truth (context-based edge maps, CBEM)
-- `evaluate`, batch precision / recall / F1 against that ground truth
-- `superimpose`, a visual check overlaying detected coordinates on a Canny edge map
+Automate ROI selection from the initial video frame.
 
-**Sample data (`data/`)**
+Compare five different ROI-selection techniques.
 
-| Folder | Contents |
-|---|---|
-| `Raw_Data/vidd_1`, `vidd_2`, `vidd_3` | Raw extracted frames from 3 taxiway videos |
-| `Labeled_Data/vidd_*/annotations/` | Sample ALINA output — labeled frames |
-| `Labeled_Data/vidd_*/textfiles/` | Sample ALINA output — matching coordinate `.txt` files |
-| `gt_alina_labels/canny_textfiles/` | Hand-created CBEM ground-truth coordinates, 3 subsets |
-| `gt_alina_labels/canny_images/` | CBEM edge-map images (visual reference for the above) |
-| `gt_alina_labels/ALINA_textfiles/` | ALINA's own output on those same ground-truth frames, for direct comparison |
+Integrate generated ROIs with ALINA's existing perspective transformation and labeling pipeline.
 
-## Repository structure
+Evaluate ROI selection using Intersection over Union (IoU).
 
-```
-alina/
-  config.py       # PipelineConfig / ROIConfig — all tunables in one place
-  roi.py          # interactive ROI selection (+ display-scaling for large frames)
-  color.py        # HSV color feature normalization
-  histogram.py    # vertical projection / peak detection
-  traversal.py    # CIRCLEDAT: circular threshold pixel discovery and traversal
-  pipeline.py     # process_image() / run_batch() — the main labeling loop
-  io_utils.py     # video -> frames, frame rotation, batch resize
+Measure ALINA's reported labeling coverage and processing runtime.
 
-eval/
-  metrics.py      # precision / recall / F1
-  cbem.py         # interactive tool to hand-create ground truth (CBEM)
-  evaluate.py     # batch precision/recall/F1 vs. ground truth
-  superimpose.py  # visual check: overlay coordinates on a Canny edge map
+Identify successful detections, false positives, and limitations.
 
-cli.py            # `alina <subcommand>` entry point
-pyproject.toml    # pip install -e .
-requirements.txt
+Implemented Methods
 
-data/
-  Raw_Data/            # raw extracted video frames (vidd_1, vidd_2, vidd_3)
-  Labeled_Data/         # sample ALINA output: annotations/ (images) + textfiles/ (coords)
-  gt_alina_labels/      # ground truth used for evaluation
-    canny_textfiles/       # CBEM coordinate files (hand-created ground truth)
-    canny_images/          # CBEM edge-map images (visual reference)
-    ALINA_textfiles/       # ALINA's own output on those same ground-truth frames
-```
+Method 1: K-Means Color Clustering
 
-## Setup
+Uses unsupervised K-Means clustering in Lab color space to segment visually similar image regions.
 
-Works with Python 3.9+ (tested with 3.10.12).
+The algorithm identifies a pavement-like cluster, applies morphological filtering, and constructs a quadrilateral ROI based on the selected region.
 
-```bash
-git clone <this-repo>
+Parameters: K = 4, random seed = 42.
+
+Method 2: Canny Edge Detection + Hough Transform
+
+Uses Canny edge detection to identify boundaries and the probabilistic Hough Transform to identify line segments.
+
+Candidate line segments are filtered based on orientation and length. The selected segment is used to estimate the ROI geometry.
+
+Parameters: Canny thresholds = 50 and 150; Hough threshold = 25; minimum line length = 25; maximum line gap = 20.
+
+Method 3: HSV Color Thresholding
+
+Converts the image to HSV color space and identifies pixels corresponding to yellow taxiway markings.
+
+Connected-component analysis selects a candidate marking, and line fitting determines the orientation of the automatic ROI.
+
+HSV thresholds: Lower = (15, 60, 70); Upper = (40, 255, 255).
+
+Method 4: SegFormer Semantic Segmentation
+
+Uses a pretrained SegFormer-B0 neural network to predict semantic categories for individual image pixels.
+
+The model identifies pavement-like regions, and geometric heuristics estimate the ROI position.
+
+Pretrained model: nvidia/segformer-b0-finetuned-ade-512-512
+
+The model was pretrained on ADE20K, rather than airport-specific imagery.
+
+Method 5: Hybrid SegFormer + HSV
+
+Combines semantic segmentation with color-based detection.
+
+SegFormer provides pavement-region information, while HSV thresholding identifies yellow markings. The two sources are combined to guide line fitting and determine ROI boundaries.
+
+This approach evaluates whether combining learned semantic features with traditional computer vision improves ROI selection.
+
+Project Structure
+
+ALINA/
+├── alina/
+│   ├── config.py
+│   ├── pipeline.py
+│   └── roi.py
+├── experiments/
+│   ├── kmeans_roi.py
+│   ├── canny_hough_roi.py
+│   ├── hsv_roi.py
+│   ├── segformer_roi.py
+│   ├── hybrid_roi.py
+│   ├── run_kmeans_alina.py
+│   ├── run_canny_hough_alina.py
+│   ├── run_hsv_alina.py
+│   ├── run_segformer_alina.py
+│   ├── run_hybrid_alina.py
+│   ├── manual_reference_roi.py
+│   ├── evaluate_roi.py
+│   └── plot_results.py
+├── data/
+│   └── Raw_Data/
+│       └── vidd_1/
+├── outputs/
+│   ├── kmeans/
+│   ├── canny_hough/
+│   ├── hsv/
+│   ├── segformer/
+│   ├── hybrid/
+│   └── evaluation/
+├── cli.py
+└── README.md
+
+Directory contents may vary depending on which outputs have been generated.
+
+Installation and Setup
+
+1. Clone the repository
+
+git clone https://github.com/sbera2022/ALINA.git
 cd ALINA
-python3 -m venv venv
-source venv/bin/activate        # Windows: venv\Scripts\activate
-pip install -e .
-```
 
-This installs `numpy`, `opencv-python`, `matplotlib`, and puts an `alina` command on your PATH (inside the venv). Verify with:
+2. Create a virtual environment
 
-```bash
-alina --help
-```
+Python 3.12 is recommended for compatibility with the pretrained segmentation dependencies.
 
-Every command below also has an alternative `python cli.py ...`, run from the repo root.
+On Windows:
 
-## Running the pipeline
+py -3.12 -m venv venv_segformer
+venv_segformer\Scripts\activate
 
-### `alina label` (batch)
+3. Install dependencies
 
-Labels every frame in a folder using one ROI, drawn once on the first frame and reused for the rest. Use this for the normal end-to-end workflow: point it at a folder of raw frames from one video, and it labels all of them in one run.
+python -m pip install --upgrade pip
+python -m pip install -e .
+python -m pip install torch torchvision transformers pillow matplotlib
 
-```bash
-alina label \
-  --input-dir data/Raw_Data/vidd_1 \
-  --output-images-dir outputs/vidd_1/annotated \
-  --output-coords-dir outputs/vidd_1/coords \
-  --log-file outputs/vidd_1/timing.log
-```
-```bash
-python cli.py label \
-  --input-dir data/Raw_Data/vidd_1 \
-  --output-images-dir outputs/vidd_1/annotated \
-  --output-coords-dir outputs/vidd_1/coords \
-  --log-file outputs/vidd_1/timing.log
-```
+The first SegFormer run downloads the pretrained model. An internet connection is required for that initial download.
 
-| Arg | Default | Meaning |
-|---|---|---|
-| `--input-dir` | – | Folder of `.jpg` frames to label |
-| `--output-images-dir` | – | Where annotated frames are written |
-| `--output-coords-dir` | – | Where per-frame coordinate `.txt` files are written |
-| `--log-file` | – | Also write the per-frame log + summary to this file |
-| `--peak-threshold` | `50` | Min histogram peak height to attempt line extraction |
-| `--circular-threshold` | `15` | CIRCLEDAT neighborhood radius (pixels) |
-| `--min-white-pixels` | `200` | Min white pixels in the peak column to trust it |
-| `--yellow-lower` | `0 70 170` | Lower HSV bound for the color mask (H S V) |
-| `--yellow-upper` | `255 255 255` | Upper HSV bound for the color mask (H S V) |
-| `--mask-ignore-left-columns` | `300` | Zero out this many mask columns from the left before traversal |
+4. Prepare the dataset
 
-You'll be shown the first frame and asked to click the ROI: **Bottom-Left, Top-Left, Top-Right, Bottom-Right**, in that order, then press any key. You'll then see a preview of the finalized ROI drawn on the reference frame: press any key to start the batch if it looks right, or `Ctrl+C` and re-run the command to redo the ROI if not. The selected ROI is applied to every frame in the folder.
+Place the evaluation frames inside:
 
-Note: Frames larger than 1080px on their longest side are shown at a scaled-down size so the window fits your screen, and clicks are mapped back to full-resolution coordinates automatically.
+data/Raw_Data/vidd_1/
 
-### `alina label --image` (single frame)
+The experiments use 00001.jpg as the initial frame for automatic ROI generation.
 
-You may use this command on one image from the dataset to tune parameters (`--peak-threshold`, `--circular-threshold`, `--min-white-pixels`, `--yellow-lower`/`--yellow-upper`, `--mask-ignore-left-columns`) before committing to a full batch.
+Running the Experiments
 
-```bash
-alina label \
-  --image data/Raw_Data/vidd_1/00001.jpg \
-  --output-images-dir outputs/debug \
-  --output-coords-dir outputs/debug \
-  --show
-```
-```bash
-python cli.py label \
-  --image data/Raw_Data/vidd_1/00001.jpg \
-  --output-images-dir outputs/debug \
-  --output-coords-dir outputs/debug \
-  --show
-```
+Run the following commands from the project root.
 
-| Arg | Default | Meaning |
-|---|---|---|
-| `--image` | – | Process a single image instead of a whole `--input-dir` |
-| `--show` | off | Display the annotated result window |
+Generate automatic ROIs
 
-### `alina video-to-frames`
+python -m experiments.kmeans_roi
+python -m experiments.canny_hough_roi
+python -m experiments.hsv_roi
+python -m experiments.segformer_roi
+python -m experiments.hybrid_roi
 
-Extracts every frame of a video file into a folder of numbered `.jpg` images. Use this first, before labeling, if you're starting from a raw video instead of already-extracted frames.
+Run SegFormer before Hybrid because the hybrid implementation reuses the saved semantic predictions.
 
-```bash
-alina video-to-frames --video raw/taxiway.mp4 --output-dir data/Raw_Data/vidd_4
-```
-```bash
-python cli.py video-to-frames --video raw/taxiway.mp4 --output-dir data/Raw_Data/vidd_4
-```
+Each method generates an ALINA-compatible ROI saved as alina_roi.npy.
 
-### `alina rotate-frames`
+Run ALINA with the generated ROIs
 
-Rotates every frame in a folder by a fixed angle. Use this if a video was recorded with the camera mounted upside-down or sideways, before running `label` on it.
+python -m experiments.run_kmeans_alina
+python -m experiments.run_canny_hough_alina
+python -m experiments.run_hsv_alina
+python -m experiments.run_segformer_alina
+python -m experiments.run_hybrid_alina
 
-```bash
-alina rotate-frames --input-dir data/Raw_Data/vidd_4 --output-dir outputs/rotated --angle 180
-```
-```bash
-python cli.py rotate-frames --input-dir data/Raw_Data/vidd_4 --output-dir outputs/rotated --angle 180
-```
+The primary experiments use the same downstream ALINA configuration, including mask_ignore_left_columns=300.
 
-| Arg | Default | Meaning |
-|---|---|---|
-| `--angle` | `180` | `90`, `180`, or `270` |
+Evaluate ROI overlap
 
-### `alina resize-images`
+Create the manual reference:
 
-Resizes all frames in a folder to a fixed resolution.
+python -m experiments.manual_reference_roi
 
-```bash
-alina resize-images --input-dir data/Raw_Data/vidd_4 --output-dir outputs/resized --width 1920 --height 1080
-```
-```bash
-python cli.py resize-images --input-dir data/Raw_Data/vidd_4 --output-dir outputs/resized --width 1920 --height 1080
-```
+Then calculate IoU:
 
-| Arg | Default | Meaning |
-|---|---|---|
-| `--width` / `--height` | `1920` / `1080` | Target resolution |
+python -m experiments.evaluate_roi
 
-### `alina cbem` (create ground truth)
+Generate evaluation graphs
 
-You can hand-trace a line marking on one frame and run Canny edge detection inside that traced region to produce ground-truth coordinates. Use this to build (or add to) a ground-truth set before running `evaluate` — it's how the `gt_alina_labels/canny_*` data in this repo was created.
+python -m experiments.plot_results
 
-```bash
-alina cbem --image data/Raw_Data/vidd_1/00001.jpg --output-dir outputs/cbem
-```
-```bash
-python cli.py cbem --image data/Raw_Data/vidd_1/00001.jpg --output-dir outputs/cbem
-```
+The evaluation script generates:
 
-Click and drag to trace an outline around a visible line marking, press **`s`** to run Canny edge detection inside the traced region and save it, or **`Esc`** to close. Multiple regions can be traced and saved from the same frame.
+final_results.csv
 
-### `alina evaluate`
+labeling_rate.png
 
-Computes precision, recall, and F1 by comparing ALINA's coordinate output against ground-truth (CBEM) coordinate files. Use this after you have both a ground-truth set (from `cbem`) and ALINA's output (from `label`) for the same frames, to measure how accurate the labeling was.
+roi_iou.png
 
-```bash
-alina evaluate \
-  --canny-dirs data/gt_alina_labels/canny_textfiles/canny_textfiles_1 data/gt_alina_labels/canny_textfiles/canny_textfiles_2 data/gt_alina_labels/canny_textfiles/canny_textfiles_3 \
-  --alina-dirs data/gt_alina_labels/ALINA_textfiles/ALINA_textfiles_1 data/gt_alina_labels/ALINA_textfiles/ALINA_textfiles_2 data/gt_alina_labels/ALINA_textfiles/ALINA_textfiles_3
-```
-```bash
-python cli.py evaluate \
-  --canny-dirs data/gt_alina_labels/canny_textfiles/canny_textfiles_1 data/gt_alina_labels/canny_textfiles/canny_textfiles_2 data/gt_alina_labels/canny_textfiles/canny_textfiles_3 \
-  --alina-dirs data/gt_alina_labels/ALINA_textfiles/ALINA_textfiles_1 data/gt_alina_labels/ALINA_textfiles/ALINA_textfiles_2 data/gt_alina_labels/ALINA_textfiles/ALINA_textfiles_3
-```
+runtime.png
 
-Prints average recall, precision, and F1 across all matched frame pairs. `--canny-dirs`/`--alina-dirs` are paired by position.
+Evaluation Metrics
 
-### `alina superimpose`
+Reported Labeling Rate
 
-Draws a given coordinate file's points on top of a Canny edge map of the same frame, so you can visually confirm the detected pixels superimpose the line marking.
+The percentage of frames for which ALINA reports a labeling result.
 
-```bash
-alina superimpose \
-  --image data/Raw_Data/vidd_1/00001.jpg \
-  --coords outputs/vidd_1/coords/00001.txt \
-  --output-dir outputs/superimpose_check
-```
-```bash
-python cli.py superimpose \
-  --image data/Raw_Data/vidd_1/00001.jpg \
-  --coords outputs/vidd_1/coords/00001.txt \
-  --output-dir outputs/superimpose_check
-```
+[
+\text{Labeling Rate} = \frac{\text{Frames Reported Labeled}}{\text{Total Frames}} \times 100
+]
 
-`--output-dir` is optional; omit it to just view the windows without saving.
+This metric does not necessarily measure correct line detection.
 
-## Benchmark results
+Intersection over Union (IoU)
 
-**ALINA vs. CDLEM** [2], evaluated against a 120-frame CBEM ground-truth set:
+Measures the geometric overlap between an automatically generated ROI and a manually selected reference ROI.
 
-| Algorithm | Detection Rate (%) | Processing Time (ms) |
-|---|---|---|
-| CDLEM | 91.14 | 120.35 |
-| **ALINA** | **98.45** | **50.09** |
+[
+IoU = \frac{|ROI_{automatic} \cap ROI_{manual}|}{|ROI_{automatic} \cup ROI_{manual}|}
+]
 
-**CIRCLEDAT vs. sliding-window search** [3], for isolating line-marking pixels:
+Processing Runtime
 
-| Algorithm | Time Complexity | Processing Time (ms) |
-|---|---|---|
-| Sliding Window | O(m × n) | 10.90 |
-| **CIRCLEDAT** | **O(k)** | **3.33** |
+Measures the average time ALINA takes to process an image after the ROI has been generated. ROI-generation and model-inference times are not included in the reported ALINA runtimes.
 
-## References
+Experimental Results
 
-[1] Khan, M. A. H., Ganeriwala, P., Bhattacharyya, S., Neogi, N., & Muthalagu, R. (2024, June). Alina: Advanced line identification and notation algorithm. In 2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW) (pp. 7293-7302). IEEE.
+All five methods were evaluated on the same 50-frame batch.
 
-[2] Ganeriwala, P., Bhattacharyya, S., Gunther, S., Kish, B., Khan, M. A. H., Dhadoti, A., & Neogi, N. (2023, December). Assisttaxi: A comprehensive dataset for taxiway analysis and autonomous operations. In 2023 International Conference on Machine Learning and Applications (ICMLA) (pp. 1094-1099). IEEE.
+Method
 
-[3] Muthalagu, R., Bolimera, A., & Kalaichelvi, V. (2020). Lane detection technique based on perspective transformation and histogram analysis for self-driving cars. Computers & Electrical Engineering, 85, 106653.
+Frames Labeled
 
-```bibtex
-@inproceedings{khan2024alina,
-  title={Alina: Advanced line identification and notation algorithm},
-  author={Khan, Mohammed Abdul Hafeez and Ganeriwala, Parth and Bhattacharyya, Siddhartha and Neogi, Natasha and Muthalagu, Raja},
-  booktitle={2024 IEEE/CVF Conference on Computer Vision and Pattern Recognition Workshops (CVPRW)},
-  pages={7293--7302},
-  year={2024},
-  organization={IEEE}
-}
-```
+Labeling Rate
 
-## Acknowledgement
+ROI IoU
 
-This work is built with [OpenCV](https://opencv.org/), [NumPy](https://numpy.org/), and [Matplotlib](https://matplotlib.org/), and evaluated on the AssistTaxi dataset [2]. We thank the authors of these projects for making them available to the community.
+Average ALINA Time
+
+K-Means
+
+26/50
+
+52%
+
+0.4931
+
+20.6368 s
+
+Canny + Hough
+
+0/50
+
+0%
+
+0.5376
+
+0.2875 s
+
+HSV
+
+10/50
+
+20%
+
+0.5705
+
+0.3669 s
+
+SegFormer
+
+2/50
+
+4%
+
+0.3788
+
+0.6018 s
+
+Hybrid
+
+20/50
+
+40%
+
+0.4329
+
+8.3619 s
+
+Labeling Rate Comparison
+
+
+
+ROI IoU Comparison
+
+
+
+Processing Runtime Comparison
+
+
+
+Key Findings
+
+K-Means achieved the highest reported labeling rate at 52%.
+
+HSV achieved the highest ROI IoU at 0.5705.
+
+Hybrid produced more labeled frames than HSV and SegFormer individually.
+
+SegFormer showed limited transferability from general-purpose semantic segmentation to airport taxiway imagery.
+
+The highest labeling rate did not necessarily correspond to the most accurate visual detections.
+
+Canny + Hough Sensitivity Experiment
+
+A separate experiment changed ALINA's mask_ignore_left_columns setting from 300 to 0.
+
+Mask Setting
+
+Frames Labeled
+
+Rate
+
+Average Time
+
+300
+
+0/50
+
+0%
+
+0.2875 s
+
+0
+
+20/50
+
+40%
+
+3.2814 s
+
+The modified configuration improved reported labeling coverage and produced a visually aligned partial detection on frame 00001.jpg.
+
+This result demonstrates that downstream masking parameters significantly affect ALINA's behavior.
+
+The modified configuration is treated as a sensitivity experiment rather than directly replacing the primary baseline.
+
+Qualitative Evaluation
+
+Representative annotated images were visually inspected to determine whether ALINA's reported detections followed the actual yellow taxiway markings.
+
+Method
+
+Frame
+
+Observation
+
+K-Means
+
+00001.jpg
+
+Partial detection of a short yellow-line segment
+
+Canny + Hough (mask = 0)
+
+00001.jpg
+
+Strong partial detection following much of the right-hand marking
+
+HSV
+
+00001.jpg
+
+Partial detection along a substantial straight segment
+
+SegFormer
+
+01060.jpg
+
+False positive near the far-right image boundary
+
+Hybrid
+
+01061.jpg
+
+False positive near the far-right image boundary
+
+These examples demonstrate that an ALINA [Labeled] result does not necessarily represent a correct detection.
+
+Limitations
+
+Fixed ROI: Each automatic ROI was generated from the initial frame and reused throughout the evaluation batch.
+
+Limited reference annotations: ROI IoU was evaluated against one manually selected reference ROI.
+
+False positives: Some frames reported as labeled contained annotations outside the intended taxiway marking.
+
+Semantic domain mismatch: The pretrained SegFormer model was not specialized for airport taxiway imagery.
+
+Parameter sensitivity: Downstream masking settings significantly affected the results.
+
+Runtime variation: ALINA processing time varied considerably with the amount of candidate line data processed.
+
+Future Improvements
+
+Possible extensions include:
+
+Generating a new ROI for every frame.
+
+Using airport-specific segmentation datasets.
+
+Fine-tuning semantic segmentation models for taxiway markings.
+
+Evaluating against manually annotated line masks.
+
+Measuring precision, recall, and F1-score for actual line detection.
+
+Improving runtime through optimized line-processing algorithms.
+
+Reproducibility
+
+The experiments use deterministic seeds where applicable, including seed 42 for K-Means clustering and the SegFormer experiment.
+
+For consistent results, preserve the same input images, ROI-generation parameters, model checkpoint, and ALINA configuration.
+
+The main experiment uses mask_ignore_left_columns=300; the Canny + Hough sensitivity experiment uses 0.
+
+References
+
+ALINA GitHub Repository
+
+SegFormer-B0 ADE20K Pretrained Model
