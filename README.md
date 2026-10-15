@@ -1,6 +1,15 @@
-ALINA: Automated Taxiway Line Identification Using AI/ML and Computer Vision
+# ALINA: Automated Taxiway Line Identification Using AI/ML and Computer Vision
 
-Project Overview
+[![Python](https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Transformers](https://img.shields.io/badge/%F0%9F%A4%97%20Transformers-FFD21E)](https://huggingface.co/docs/transformers)
+[![SegFormer](https://img.shields.io/badge/Model-SegFormer--B0%20(ADE20K)-76B900?logo=nvidia&logoColor=white)](https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512)
+[![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?logo=opencv&logoColor=white)](https://opencv.org/)
+[![Matplotlib](https://img.shields.io/badge/Matplotlib-11557C)](https://matplotlib.org/)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?logo=windows&logoColor=white)](#2-create-a-virtual-environment)
+[![Based on ALINA](https://img.shields.io/badge/Based%20on-ALINA-181717?logo=github&logoColor=white)](https://github.com/sbera2022/ALINA)
+
+## Project Overview
 
 This project extends the ALINA (Automated Line Identification and Annotation) pipeline by exploring methods for automatically selecting a Region of Interest (ROI) in airport taxiway images.
 
@@ -8,70 +17,56 @@ The original ALINA workflow requires users to manually select a region before ap
 
 Five approaches were implemented and evaluated on a 50-frame image dataset.
 
-Original Repository: ALINA
+**Original Repository:** [ALINA](https://github.com/sbera2022/ALINA)
 
-Project Objectives
+## Project Objectives
 
 The primary objectives are to:
 
-Automate ROI selection from the initial video frame.
+- Automate ROI selection from the initial video frame.
+- Compare five different ROI-selection techniques.
+- Integrate generated ROIs with ALINA's existing perspective transformation and labeling pipeline.
+- Evaluate ROI selection using Intersection over Union (IoU).
+- Measure ALINA's reported labeling coverage and processing runtime.
+- Identify successful detections, false positives, and limitations.
 
-Compare five different ROI-selection techniques.
+## Implemented Methods
 
-Integrate generated ROIs with ALINA's existing perspective transformation and labeling pipeline.
+### Method 1: K-Means Color Clustering
 
-Evaluate ROI selection using Intersection over Union (IoU).
+Uses unsupervised K-Means clustering in Lab color space to segment visually similar image regions. The algorithm identifies a pavement-like cluster, applies morphological filtering, and constructs a quadrilateral ROI based on the selected region.
 
-Measure ALINA's reported labeling coverage and processing runtime.
+**Parameters:** K = 4, random seed = 42.
 
-Identify successful detections, false positives, and limitations.
+### Method 2: Canny Edge Detection + Hough Transform
 
-Implemented Methods
+Uses Canny edge detection to identify boundaries and the probabilistic Hough Transform to identify line segments. Candidate line segments are filtered based on orientation and length. The selected segment is used to estimate the ROI geometry.
 
-Method 1: K-Means Color Clustering
+**Parameters:** Canny thresholds = 50 and 150; Hough threshold = 25; minimum line length = 25; maximum line gap = 20.
 
-Uses unsupervised K-Means clustering in Lab color space to segment visually similar image regions.
+### Method 3: HSV Color Thresholding
 
-The algorithm identifies a pavement-like cluster, applies morphological filtering, and constructs a quadrilateral ROI based on the selected region.
+Converts the image to HSV color space and identifies pixels corresponding to yellow taxiway markings. Connected-component analysis selects a candidate marking, and line fitting determines the orientation of the automatic ROI.
 
-Parameters: K = 4, random seed = 42.
+**HSV thresholds:** Lower = (15, 60, 70); Upper = (40, 255, 255).
 
-Method 2: Canny Edge Detection + Hough Transform
+### Method 4: SegFormer Semantic Segmentation
 
-Uses Canny edge detection to identify boundaries and the probabilistic Hough Transform to identify line segments.
+Uses a pretrained SegFormer-B0 neural network to predict semantic categories for individual image pixels. The model identifies pavement-like regions, and geometric heuristics estimate the ROI position.
 
-Candidate line segments are filtered based on orientation and length. The selected segment is used to estimate the ROI geometry.
+**Pretrained model:** [`nvidia/segformer-b0-finetuned-ade-512-512`](https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512)
 
-Parameters: Canny thresholds = 50 and 150; Hough threshold = 25; minimum line length = 25; maximum line gap = 20.
+> The model was pretrained on ADE20K, rather than airport-specific imagery.
 
-Method 3: HSV Color Thresholding
+### Method 5: Hybrid SegFormer + HSV
 
-Converts the image to HSV color space and identifies pixels corresponding to yellow taxiway markings.
-
-Connected-component analysis selects a candidate marking, and line fitting determines the orientation of the automatic ROI.
-
-HSV thresholds: Lower = (15, 60, 70); Upper = (40, 255, 255).
-
-Method 4: SegFormer Semantic Segmentation
-
-Uses a pretrained SegFormer-B0 neural network to predict semantic categories for individual image pixels.
-
-The model identifies pavement-like regions, and geometric heuristics estimate the ROI position.
-
-Pretrained model: nvidia/segformer-b0-finetuned-ade-512-512
-
-The model was pretrained on ADE20K, rather than airport-specific imagery.
-
-Method 5: Hybrid SegFormer + HSV
-
-Combines semantic segmentation with color-based detection.
-
-SegFormer provides pavement-region information, while HSV thresholding identifies yellow markings. The two sources are combined to guide line fitting and determine ROI boundaries.
+Combines semantic segmentation with color-based detection. SegFormer provides pavement-region information, while HSV thresholding identifies yellow markings. The two sources are combined to guide line fitting and determine ROI boundaries.
 
 This approach evaluates whether combining learned semantic features with traditional computer vision improves ROI selection.
 
-Project Structure
+## Project Structure
 
+```text
 ALINA/
 ├── alina/
 │   ├── config.py
@@ -103,319 +98,220 @@ ALINA/
 │   └── evaluation/
 ├── cli.py
 └── README.md
+```
 
-Directory contents may vary depending on which outputs have been generated.
+> Directory contents may vary depending on which outputs have been generated.
 
-Installation and Setup
+## Installation and Setup
 
-1. Clone the repository
+### 1. Clone the repository
 
+```bash
 git clone https://github.com/sbera2022/ALINA.git
 cd ALINA
+```
 
-2. Create a virtual environment
+### 2. Create a virtual environment
 
 Python 3.12 is recommended for compatibility with the pretrained segmentation dependencies.
 
 On Windows:
 
+```powershell
 py -3.12 -m venv venv_segformer
 venv_segformer\Scripts\activate
+```
 
-3. Install dependencies
+### 3. Install dependencies
 
+```bash
 python -m pip install --upgrade pip
 python -m pip install -e .
 python -m pip install torch torchvision transformers pillow matplotlib
+```
 
 The first SegFormer run downloads the pretrained model. An internet connection is required for that initial download.
 
-4. Prepare the dataset
+### 4. Prepare the dataset
 
 Place the evaluation frames inside:
 
+```text
 data/Raw_Data/vidd_1/
+```
 
-The experiments use 00001.jpg as the initial frame for automatic ROI generation.
+The experiments use `00001.jpg` as the initial frame for automatic ROI generation.
 
-Running the Experiments
+## Running the Experiments
 
 Run the following commands from the project root.
 
-Generate automatic ROIs
+### Generate automatic ROIs
 
+```bash
 python -m experiments.kmeans_roi
 python -m experiments.canny_hough_roi
 python -m experiments.hsv_roi
 python -m experiments.segformer_roi
 python -m experiments.hybrid_roi
+```
 
-Run SegFormer before Hybrid because the hybrid implementation reuses the saved semantic predictions.
+> **Note:** Run SegFormer before Hybrid, because the hybrid implementation reuses the saved semantic predictions.
 
-Each method generates an ALINA-compatible ROI saved as alina_roi.npy.
+Each method generates an ALINA-compatible ROI saved as `alina_roi.npy`.
 
-Run ALINA with the generated ROIs
+### Run ALINA with the generated ROIs
 
+```bash
 python -m experiments.run_kmeans_alina
 python -m experiments.run_canny_hough_alina
 python -m experiments.run_hsv_alina
 python -m experiments.run_segformer_alina
 python -m experiments.run_hybrid_alina
+```
 
-The primary experiments use the same downstream ALINA configuration, including mask_ignore_left_columns=300.
+The primary experiments use the same downstream ALINA configuration, including `mask_ignore_left_columns=300`.
 
-Evaluate ROI overlap
+### Evaluate ROI overlap
 
 Create the manual reference:
 
+```bash
 python -m experiments.manual_reference_roi
+```
 
 Then calculate IoU:
 
+```bash
 python -m experiments.evaluate_roi
+```
 
-Generate evaluation graphs
+### Generate evaluation graphs
 
+```bash
 python -m experiments.plot_results
+```
 
-The evaluation script generates:
+The evaluation scripts generate:
 
-final_results.csv
+- `final_results.csv`
+- `labeling_rate.png`
+- `roi_iou.png`
+- `runtime.png`
 
-labeling_rate.png
+## Evaluation Metrics
 
-roi_iou.png
-
-runtime.png
-
-Evaluation Metrics
-
-Reported Labeling Rate
+### Reported Labeling Rate
 
 The percentage of frames for which ALINA reports a labeling result.
 
-[
+$$
 \text{Labeling Rate} = \frac{\text{Frames Reported Labeled}}{\text{Total Frames}} \times 100
-]
+$$
 
 This metric does not necessarily measure correct line detection.
 
-Intersection over Union (IoU)
+### Intersection over Union (IoU)
 
 Measures the geometric overlap between an automatically generated ROI and a manually selected reference ROI.
 
-[
+$$
 IoU = \frac{|ROI_{automatic} \cap ROI_{manual}|}{|ROI_{automatic} \cup ROI_{manual}|}
-]
+$$
 
-Processing Runtime
+### Processing Runtime
 
-Measures the average time ALINA takes to process an image after the ROI has been generated. ROI-generation and model-inference times are not included in the reported ALINA runtimes.
+Measures the average time ALINA takes to process an image after the ROI has been generated. ROI-generation and model-inference times are **not** included in the reported ALINA runtimes.
 
-Experimental Results
+## Experimental Results
 
 All five methods were evaluated on the same 50-frame batch.
 
-Method
+| Method        | Frames Labeled | Labeling Rate | ROI IoU    | Average ALINA Time |
+| ------------- | -------------: | ------------: | ---------: | -----------------: |
+| K-Means       |          26/50 |           52% |     0.4931 |           20.6368 s |
+| Canny + Hough |           0/50 |            0% |     0.5376 |            0.2875 s |
+| HSV           |          10/50 |           20% | **0.5705** |            0.3669 s |
+| SegFormer     |           2/50 |            4% |     0.3788 |            0.6018 s |
+| Hybrid        |          20/50 |           40% |     0.4329 |            8.3619 s |
 
-Frames Labeled
+### Labeling Rate Comparison
 
-Labeling Rate
+![Labeling rate comparison](outputs/evaluation/labeling_rate.png)
 
-ROI IoU
+### ROI IoU Comparison
 
-Average ALINA Time
+![ROI IoU comparison](outputs/evaluation/roi_iou.png)
 
-K-Means
+### Processing Runtime Comparison
 
-26/50
+![Processing runtime comparison](outputs/evaluation/runtime.png)
 
-52%
+## Key Findings
 
-0.4931
+- K-Means achieved the highest reported labeling rate at 52%.
+- HSV achieved the highest ROI IoU at 0.5705.
+- Hybrid produced more labeled frames than HSV and SegFormer individually.
+- SegFormer showed limited transferability from general-purpose semantic segmentation to airport taxiway imagery.
+- The highest labeling rate did not necessarily correspond to the most accurate visual detections.
 
-20.6368 s
+## Canny + Hough Sensitivity Experiment
 
-Canny + Hough
+A separate experiment changed ALINA's `mask_ignore_left_columns` setting from 300 to 0.
 
-0/50
+| Mask Setting | Frames Labeled | Rate | Average Time |
+| -----------: | -------------: | ---: | -----------: |
+|          300 |           0/50 |   0% |     0.2875 s |
+|            0 |          20/50 |  40% |     3.2814 s |
 
-0%
+The modified configuration improved reported labeling coverage and produced a visually aligned partial detection on frame `00001.jpg`.
 
-0.5376
+This result demonstrates that downstream masking parameters significantly affect ALINA's behavior. The modified configuration is treated as a sensitivity experiment rather than directly replacing the primary baseline.
 
-0.2875 s
-
-HSV
-
-10/50
-
-20%
-
-0.5705
-
-0.3669 s
-
-SegFormer
-
-2/50
-
-4%
-
-0.3788
-
-0.6018 s
-
-Hybrid
-
-20/50
-
-40%
-
-0.4329
-
-8.3619 s
-
-Labeling Rate Comparison
-
-
-
-ROI IoU Comparison
-
-
-
-Processing Runtime Comparison
-
-
-
-Key Findings
-
-K-Means achieved the highest reported labeling rate at 52%.
-
-HSV achieved the highest ROI IoU at 0.5705.
-
-Hybrid produced more labeled frames than HSV and SegFormer individually.
-
-SegFormer showed limited transferability from general-purpose semantic segmentation to airport taxiway imagery.
-
-The highest labeling rate did not necessarily correspond to the most accurate visual detections.
-
-Canny + Hough Sensitivity Experiment
-
-A separate experiment changed ALINA's mask_ignore_left_columns setting from 300 to 0.
-
-Mask Setting
-
-Frames Labeled
-
-Rate
-
-Average Time
-
-300
-
-0/50
-
-0%
-
-0.2875 s
-
-0
-
-20/50
-
-40%
-
-3.2814 s
-
-The modified configuration improved reported labeling coverage and produced a visually aligned partial detection on frame 00001.jpg.
-
-This result demonstrates that downstream masking parameters significantly affect ALINA's behavior.
-
-The modified configuration is treated as a sensitivity experiment rather than directly replacing the primary baseline.
-
-Qualitative Evaluation
+## Qualitative Evaluation
 
 Representative annotated images were visually inspected to determine whether ALINA's reported detections followed the actual yellow taxiway markings.
 
-Method
+| Method                   | Frame       | Observation                                                       |
+| ------------------------ | ----------- | ----------------------------------------------------------------- |
+| K-Means                  | `00001.jpg` | Partial detection of a short yellow-line segment                  |
+| Canny + Hough (mask = 0) | `00001.jpg` | Strong partial detection following much of the right-hand marking |
+| HSV                      | `00001.jpg` | Partial detection along a substantial straight segment            |
+| SegFormer                | `01060.jpg` | False positive near the far-right image boundary                  |
+| Hybrid                   | `01061.jpg` | False positive near the far-right image boundary                  |
 
-Frame
+These examples demonstrate that an ALINA `[Labeled]` result does not necessarily represent a correct detection.
 
-Observation
+## Limitations
 
-K-Means
+- **Fixed ROI:** Each automatic ROI was generated from the initial frame and reused throughout the evaluation batch.
+- **Limited reference annotations:** ROI IoU was evaluated against one manually selected reference ROI.
+- **False positives:** Some frames reported as labeled contained annotations outside the intended taxiway marking.
+- **Semantic domain mismatch:** The pretrained SegFormer model was not specialized for airport taxiway imagery.
+- **Parameter sensitivity:** Downstream masking settings significantly affected the results.
+- **Runtime variation:** ALINA processing time varied considerably with the amount of candidate line data processed.
 
-00001.jpg
-
-Partial detection of a short yellow-line segment
-
-Canny + Hough (mask = 0)
-
-00001.jpg
-
-Strong partial detection following much of the right-hand marking
-
-HSV
-
-00001.jpg
-
-Partial detection along a substantial straight segment
-
-SegFormer
-
-01060.jpg
-
-False positive near the far-right image boundary
-
-Hybrid
-
-01061.jpg
-
-False positive near the far-right image boundary
-
-These examples demonstrate that an ALINA [Labeled] result does not necessarily represent a correct detection.
-
-Limitations
-
-Fixed ROI: Each automatic ROI was generated from the initial frame and reused throughout the evaluation batch.
-
-Limited reference annotations: ROI IoU was evaluated against one manually selected reference ROI.
-
-False positives: Some frames reported as labeled contained annotations outside the intended taxiway marking.
-
-Semantic domain mismatch: The pretrained SegFormer model was not specialized for airport taxiway imagery.
-
-Parameter sensitivity: Downstream masking settings significantly affected the results.
-
-Runtime variation: ALINA processing time varied considerably with the amount of candidate line data processed.
-
-Future Improvements
+## Future Improvements
 
 Possible extensions include:
 
-Generating a new ROI for every frame.
+- Generating a new ROI for every frame.
+- Using airport-specific segmentation datasets.
+- Fine-tuning semantic segmentation models for taxiway markings.
+- Evaluating against manually annotated line masks.
+- Measuring precision, recall, and F1-score for actual line detection.
+- Improving runtime through optimized line-processing algorithms.
 
-Using airport-specific segmentation datasets.
-
-Fine-tuning semantic segmentation models for taxiway markings.
-
-Evaluating against manually annotated line masks.
-
-Measuring precision, recall, and F1-score for actual line detection.
-
-Improving runtime through optimized line-processing algorithms.
-
-Reproducibility
+## Reproducibility
 
 The experiments use deterministic seeds where applicable, including seed 42 for K-Means clustering and the SegFormer experiment.
 
 For consistent results, preserve the same input images, ROI-generation parameters, model checkpoint, and ALINA configuration.
 
-The main experiment uses mask_ignore_left_columns=300; the Canny + Hough sensitivity experiment uses 0.
+The main experiment uses `mask_ignore_left_columns=300`; the Canny + Hough sensitivity experiment uses `0`.
 
-References
+## References
 
-ALINA GitHub Repository
+- [ALINA GitHub Repository](https://github.com/sbera2022/ALINA)
+- [SegFormer-B0 ADE20K Pretrained Model](https://huggingface.co/nvidia/segformer-b0-finetuned-ade-512-512)
 
-SegFormer-B0 ADE20K Pretrained Model
