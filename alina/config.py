@@ -27,7 +27,10 @@ class PipelineConfig:
     yellow_lower: tuple[int, int, int] = (0, 70, 170)
     yellow_upper: tuple[int, int, int] = (255, 255, 255)
 
-    # zero out mask columns 0..mask_ignore_left_columns before traversal
+    # Assignment 5 Automatic color thresholding
+    threshold_method : str = "manual"
+    threshold_seed : int = 42
+
     mask_ignore_left_columns: int = 300
 
     roi: ROIConfig = field(default_factory=ROIConfig)

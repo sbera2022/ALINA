@@ -24,7 +24,7 @@ image = cv2.imread(str(image_path))
 if image is None:
     raise FileNotFoundError(image_path)
 
-image_small = cv2.resize(image, (640, 360))
+image_small = cv2.resize(image, (256, 256))
 image_rgb = cv2.cvtColor(image_small, cv2.COLOR_BGR2RGB)
 
 pil_image = Image.fromarray(image_rgb)

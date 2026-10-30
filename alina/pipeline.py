@@ -12,6 +12,7 @@ from .config import PipelineConfig
 from .histogram import calc_histogram
 from .roi import roi_points_to_quad
 from .traversal import circular_threshold_pixel_discovery_and_traversal
+from .auto_threshold import otsu_color_mask, adaptive_color_mask, kmeans_color_mask
 
 
 @dataclass
@@ -45,15 +46,32 @@ def process_image(img: np.ndarray, roi_points: np.ndarray, config: PipelineConfi
     color_features = normalize_color_features(warped)
 
     # 3.5 HSV-based color thresholding -> binary mask of candidate line pixels
-    lower = np.array(config.yellow_lower)
-    upper = np.array(config.yellow_upper)
-    mask = cv2.inRange(color_features, lower, upper)
+    if config.threshold_method == "otsu":
+        mask = otsu_color_mask(warped)
+    elif config.threshold_method == "adaptive":
+        mask = adaptive_color_mask(warped)
+    elif config.threshold_method == "kmeans":
+        mask = kmeans_color_mask(warped)
+    elif config.threshold_method == "manual":
+        color_features = normalize_color_features(warped)
+        lower = np.array(config.yellow_lower)
+        upper = np.array(config.yellow_upper)
+        mask = cv2.inRange(color_features, lower, upper)
+
+    roi_mask = np.zeros(mask.shape, dtype=np.uint8)
+
+    x1, y1 = config.roi.dst_top_left
+    x2, y2 = config.roi.dst_bottom_right
+
+    roi_mask[y1:y2, x1:x2] = 255
+
+    mask = cv2.bitwise_and(mask, roi_mask)
     if config.mask_ignore_left_columns > 0:
         mask[:, :config.mask_ignore_left_columns] = 0
 
     # 3.6 histogram analysis -> vertical projection, peak column
     avg_pixel, peak_value = calc_histogram(mask, min_white_pixels=config.min_white_pixels)
-   
+
     # 3.7 threshold check -> is this peak an actual line marking or noise
     if not avg_pixel or peak_value <= config.peak_pixel_threshold:
         return no_lines_img, np.empty((0, 2), dtype=np.int32), False
@@ -64,6 +82,8 @@ def process_image(img: np.ndarray, roi_points: np.ndarray, config: PipelineConfi
     line_marking_pixels = circular_threshold_pixel_discovery_and_traversal(
         binary, avg_pixel[0], avg_pixel[1], config.circular_threshold
     )
+
+
 
     height, width = binary.shape[:2]
     black_img = np.zeros((height, width), dtype=np.uint8)
@@ -77,6 +97,9 @@ def process_image(img: np.ndarray, roi_points: np.ndarray, config: PipelineConfi
     line_pixels_only = np.where(unwarped > 0)
     x_coords, y_coords = line_pixels_only[1], line_pixels_only[0]
     coords = np.column_stack((x_coords, y_coords))
+
+    if len(coords) == 0:
+        return no_lines_img, coords, False
 
     # 3.9 annotate -> mark line marking pixels in red on the original frame
     final_img[line_pixels_only] = (0, 0, 255)
@@ -115,12 +138,15 @@ def run_batch(config: PipelineConfig, roi_points: np.ndarray) -> list[ImageResul
             if img is None:
                 continue
 
+
+
             annotated, coords, had_lines = process_image(img, roi_points, config)
             elapsed = time.perf_counter() - start
 
             text_filename = path.stem + ".txt"
             np.savetxt(config.output_coords_dir / text_filename, coords, fmt="%6d")
             cv2.imwrite(str(config.output_images_dir / path.name), annotated)
+
 
             status = "Labeled" if had_lines else "No lines found"
             log_line = (
